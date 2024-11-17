@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Shopping Cart{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h4 class="mb-0">Shopping Cart</h4>
+    </div>
+    <div class="card-body">
+        <div id="cartContainer">
+           
+        </div>
+    </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadCart);
+
+async function loadCart() {
+    try {
+        const cartItems = await API.getCart();
+        displayCart(cartItems);
+    } catch (error) {
+        console.error('Error loading cart:', error);
+    }
+}
+
+function displayCart(items) {
+    const container = document.getElementById('cartContainer');
+    
+    if (!items.length) {
+        container.innerHTML = '<p class="text-center">Your cart is empty</p>';
+        return;
+    }
+
+    let totalPrice = 0;
+    const itemsHtml = items.map(item => {
+        totalPrice += parseFloat(item.product.price);
+        return `
+            <div class="card mb-3">
+                <div class="row g-0">
+                    <div class="col-md-2">
+                        <img src="${item.product.image}" class="img-fluid rounded-start" alt="${item.product.name}">
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card-body">
+                            <h5 class="card-title">${item.product.name}</h5>
+                            <p class="card-text">${item.product.description}</p>
+                            <p class="card-text"><strong>Price: $${item.product.price}</strong></p>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-center justify-content-center">
+                        <button class="btn btn-danger" onclick="removeFromCart(${item.id})">Remove</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        ${itemsHtml}
+        <div class="text-end mt-4">
+            <h4>Total: $${totalPrice.toFixed(2)}</h4>
+        </div>
+    `;
+}
+
+async function removeFromCart(cartItemId) {
+    try {
+        await API.removeFromCart(cartItemId);
+        loadCart();
+    } catch (error) {
+        console.error('Error removing item from cart:', error);
+        alert('Failed to remove item from cart');
+    }
+}
+</script>
+{% endblock %}
+<!-- {% endblock %} -->

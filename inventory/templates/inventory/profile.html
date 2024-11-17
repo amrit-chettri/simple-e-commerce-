@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">Profile Information</h4>
+            </div>
+            <div class="card-body">
+                <form id="profileForm">
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Address</label>
+                        <input type="text" class="form-control" id="address" required maxlength="30">
+                    </div>
+                    <div class="mb-3">
+                        <label for="profilePicture" class="form-label">Profile Picture</label>
+                        <input type="file" class="form-control" id="profilePicture" accept="image/*">
+                        <div id="currentPicture" class="mt-2">
+                            <!-- Current profile picture will be shown here -->
+                        </div>
+                    </div>
+                    <div class="alert alert-danger d-none" id="profileError"></div>
+                    <button type="submit" class="btn btn-primary">Update Profile</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">My Products</h4>
+            </div>
+            <div class="card-body">
+                <div id="userProductsContainer">
+                    <!-- User's products will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadProfile();
+    loadUserProducts();
+    
+    document.getElementById('profileForm').addEventListener('submit', updateProfile);
+});
+
+async function loadProfile() {
+    try {
+        const profile = await API.getProfile();
+        if (profile.length > 0) {
+            const userProfile = profile[0];
+            document.getElementById('address').value = userProfile.address;
+            if (userProfile.profile_picture) {
+                document.getElementById('currentPicture').innerHTML = `
+                    <img src="${userProfile.profile_picture}" alt="Profile Picture" class="img-thumbnail" style="max-width: 200px">
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading profile:', error);
+    }
+}
+
+async function updateProfile(event) {
+    event.preventDefault();
+    const errorDiv = document.getElementById('profileError');
+    errorDiv.classList.add('d-none');
+
+    try {
+        const profileData = {
+            address: document.getElementById('address').value
+        };
+
+        const profilePicture = document.getElementById('profilePicture').files[0];
+        if (profilePicture) {
+            profileData.profile_picture = profilePicture;
+        }
+
+        await API.updateProfile(profileData);
+        alert('Profile updated successfully!');
+        loadProfile();
+    } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.classList.remove('d-none');
+    }
+}
+
+async function loadUserProducts() {
+    try {
+        const products = await API.getProducts();
+        const userProducts = products.filter(p => p.user === currentUser);
+        displayUserProducts(userProducts);
+    } catch (error) {
+        console.error('Error loading user products:', error);
+    }
+}
+
+function displayUserProducts(products) {
+    const container = document.getElementById('userProductsContainer');
+    
+    if (!products.length) {
+        container.innerHTML = '<p class="text-center">You haven\'t added any products yet</p>';
+        return;
+    }
+
+    container.innerHTML = products.map(product => `
+        <div class="card mb-3">
+            <div class="row g-0">
+                <div class="col-md-4">
+                    <img src="${product.image}" class="img-fluid rounded-start" alt="${product.name}">
+                </div>
+                <div class="col-md-8">
+                    <div class="card-body">
+                        <h5 class="card-title">${product.name}</h5>
+                        <p class="card-text">${product.description}</p>
+                        <p class="card-text"><strong>Price: $${product.price}</strong></p>
+                        <button class="btn btn-warning me-2" onclick="editProduct(${product.id})">Edit</button>
+                        <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+</script>
+{% endblock %}
+<!-- {% endblock %} -->

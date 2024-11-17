@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+
+{% block title %}Products{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <input type="text" id="searchInput" class="form-control" placeholder="Search products...">
+    </div>
+    <div class="col-md-4">
+        <select id="sortSelect" class="form-select">
+            <option value="">Sort by...</option>
+            <option value="price">Price (Low to High)</option>
+            <option value="-price">Price (High to Low)</opation>
+            <option value="added_at">Oldest First</option>
+            <option value="-added_at">Newest First</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary w-100" onclick="showAddProductModal()">Add Product</button>
+    </div>
+</div>
+
+<div class="row" id="productsContainer">
+    <!-- Product cards will be dynamically added here -->
+</div>
+
+<div class="modal fade" id="productModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add Product</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="productForm">
+                    <input type="hidden" id="productId">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Product Name</label>
+                        <input type="text" class="form-control" id="name" required maxlength="15">
+                    </div>
+                    <div class="mb-3">
+                        <label for="price" class="form-label">Price</label>
+                        <input type="number" class="form-control" id="price" required step="0.01">
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Image</label>
+                        <input type="file" class="form-control" id="image" accept="image/*" required>
+                    </div>
+                    <div class="alert alert-danger d-none" id="productError"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="saveProduct()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+    let productModal;
+    let currentProducts = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        productModal = new bootstrap.Modal(document.getElementById('productModal'));
+        loadProducts();
+
+        document.getElementById('searchInput').addEventListener('input', debounce(loadProducts, 300));
+        document.getElementById('sortSelect').addEventListener('change', loadProducts);
+    });
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    async function loadProducts() {
+        try {
+            const search = document.getElementById('searchInput').value;
+            const ordering = document.getElementById('sortSelect').value;
+            const response = await fetch(`/api/product/?search=${search}&ordering=${ordering}`);
+            const products = await response.json();
+            currentProducts = products;
+            displayProducts(products);
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+
+    function displayProducts(products) {
+        const container = document.getElementById('productsContainer');
+        container.innerHTML = products.map(product => `
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <img src="${product.image}" class="card-img-top" alt="${product.name}" style="height: 200px; object-fit: cover;">
+                    <div class="card-body">
+                        <h5 class="card-title">${product.name}</h5>
+                        <p class="card-text">${product.description}</p>
+                        <p class="card-text"><strong>Price: $${product.price}</strong></p>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-primary me-2" onclick="addToCart(${product.id})">Add to Cart</button>
+                        ${product.user === currentUser ? `
+                            <button class="btn btn-warning me-2" onclick="editProduct(${product.id})">Edit</button>
+                            <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Delete</button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function showAddProductModal() {
+        document.getElementById('productForm').reset();
+        document.getElementById('productId').value = '';
+        document.getElementById('modalTitle').textContent = 'Add Product';
+        document.getElementById('image').required = true;
+        productModal.show();
+    }
+
+    async function saveProduct() {
+        try {
+            const form = document.getElementById('productForm');
+            const errorDiv = document.getElementById('productError');
+            errorDiv.classList.add('d-none');
+
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const productData = {
+                name: document.getElementById('name').value,
+                price: document.getElementById('price').value,
+                description: document.getElementById('description').value,
+                image: document.getElementById('image').files[0]
+            };
+
+            const productId = document.getElementById('productId').value;
+
+            if (productId) {
+                await API.updateProduct(productId, productData);
+            } else {
+                await API.createProduct(productData);
+            }
+
+            productModal.hide();
+            loadProducts();
+        } catch (error) {
+            const errorDiv = document.getElementById('productError');
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('d-none');
+        }
+    }
+
+    async function editProduct(productId) {
+        const product = currentProducts.find(p => p.id === productId);
+        if (!product) return;
+
+        document.getElementById('productId').value = product.id;
+        document.getElementById('name').value = product.name;
+        document.getElementById('price').value = product.price;
+        document.getElementById('description').value = product.description;
+        document.getElementById('image').required = false;
+        document.getElementById('modalTitle').textContent = 'Edit Product';
+        
+        productModal.show();
+    }
+
+    async function deleteProduct(productId) {
+        if (confirm('Are you sure you want to delete this product?')) {
+            try {
+                await API.deleteProduct(productId);
+                loadProducts();
+            } catch (error) {
+                console.error('Error deleting product:', error);
+            }
+        }
+    }
+
+    async function addToCart(productId) {
+        try {
+            await API.addToCart(productId);
+            alert('Product added to cart successfully!');
+        } catch (error) {
+            console.error('Error adding to cart:', error);
+            alert('Failed to add product to cart');
+        }
+    }
+</script>
+{% endblock %}
+{% endblock %}
